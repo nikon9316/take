@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>TAKE SUSHI&PIZZA</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://my.click.uz/pay/checkout.js"></script>
+</head>
+<body>
+  <div id="app">
+    <div id="orderTypeModal" class="modal-overlay show">
+      <div class="modal-card">
+        <img src="assets/logo.jpg" alt="TAKE logo" class="modal-logo" />
+        <h2 class="modal-title">Выберите тип заказа</h2>
+        <p class="modal-subtitle">Быстрое оформление в фирменном стиле TAKE</p>
+        <div class="modal-actions">
+          <button class="type-btn primary" onclick="selectOrderType('delivery')">Доставка</button>
+          <button class="type-btn secondary" onclick="selectOrderType('pickup')">Самовывоз</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="addressModal" class="modal-overlay">
+      <div class="modal-card">
+        <h2 class="modal-title">Адрес доставки</h2>
+        <p class="modal-subtitle">Сохраним адрес в базе. Его можно изменить позже.</p>
+        <input id="addressModalInput" class="modal-input" type="text" placeholder="Введите адрес" />
+        <div class="modal-actions">
+          <button class="type-btn primary" onclick="saveAddressFromModal()">Сохранить адрес</button>
+          <button class="type-btn secondary" onclick="closeAddressModal()">Позже</button>
+        </div>
+      </div>
+    </div>
+
+    <header class="header">
+      <div class="top-row">
+        <div class="restaurant-mini">
+          <div class="restaurant-avatar logo-avatar">
+            <img src="assets/logo.jpg" alt="TAKE" />
+          </div>
+
+          <div class="restaurant-mini-info">
+            <div class="restaurant-name">TAKE SUSHI&amp;PIZZA</div>
+            <button id="orderTypeButton" class="order-type-btn" onclick="openOrderTypeModal()">
+              Доставка <span>▾</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <button class="icon-btn" onclick="openOrdersScreen()">🧾</button>
+          <button class="icon-btn" onclick="openCartScreen()">🛒</button>
+        </div>
+      </div>
+
+      <div class="search-block">
+        <input id="searchInput" type="text" placeholder="Поиск по меню" oninput="renderProducts()" />
+      </div>
+
+      <div id="categoryTabs" class="category-tabs"></div>
+    </header>
+
+    <main id="mainScreen" class="screen active">
+      <section class="hero-banner">
+        <div class="hero-overlay">
+          <div class="hero-badge">TAKE • premium taste</div>
+          <h1>Суши, пицца и яркие новинки</h1>
+          <p>Фирменный dark-style интерфейс, акцент на вкус, подачу и удобный заказ.</p>
+        </div>
+      </section>
+
+      <section class="promo-row">
+        <div class="promo-card promo-red">
+          <div class="promo-title">Хиты TAKE</div>
+          <div class="promo-text">Самые популярные позиции меню</div>
+        </div>
+        <div class="promo-card promo-dark">
+          <div class="promo-title">Оплата онлайн</div>
+          <div class="promo-text">Humo, Uzcard или наличные при получении</div>
+        </div>
+      </section>
+
+      <section class="restaurant-card">
+        <div class="restaurant-card-left">
+          <img src="assets/logo.jpg" alt="TAKE restaurant" />
+        </div>
+
+        <div class="restaurant-card-right">
+          <div class="restaurant-card-title">TAKE SUSHI&amp;PIZZA</div>
+          <div class="restaurant-meta">
+            <span>⭐ 4.9</span>
+            <span>•</span>
+            <span>Суши / Пицца</span>
+            <span>•</span>
+            <span>Premium style</span>
+          </div>
+
+          <div id="savedAddressCard" class="saved-address-card hidden">
+            <div class="saved-address-label">Адрес доставки</div>
+            <div id="savedAddressText" class="saved-address-text"></div>
+            <button class="edit-address-btn" onclick="openAddressModal()">Изменить</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-head">
+        <h2>Рекомендуем</h2>
+      </section>
+
+      <section id="productGrid" class="product-grid"></section>
+    </main>
+
+    <section id="cartScreen" class="screen">
+      <div class="cart-header">
+        <button class="back-btn" onclick="backToMain()">←</button>
+        <h2>Корзина</h2>
+      </div>
+
+      <div id="cartItems" class="cart-items"></div>
+
+      <div id="cartAddressBlock" class="cart-address-block hidden">
+        <div class="cart-address-top">
+          <div>
+            <div class="saved-address-label">Адрес доставки</div>
+            <div id="cartAddressText" class="saved-address-text"></div>
+          </div>
+          <button class="edit-address-btn" onclick="openAddressModal()">Изменить</button>
+        </div>
+      </div>
+
+      <div class="cart-summary">
+        <div class="summary-row">
+          <span>Товары</span>
+          <span id="itemsTotalText">0 сум</span>
+        </div>
+        <div class="summary-row payment-row">
+          <span>Способ оплаты</span>
+          <div class="payment-options vertical">
+            <button id="payUzcardBtn" class="payment-btn" onclick="setPaymentMethod('click_uzcard')">Картой Uzcard</button>
+            <button id="payHumoBtn" class="payment-btn" onclick="setPaymentMethod('click_humo')">Картой Humo</button>
+            <button id="payCashBtn" class="payment-btn" onclick="setPaymentMethod('cash')">Наличными</button>
+          </div>
+        </div>
+        <div class="summary-row total-row">
+          <span>Итого</span>
+          <span id="grandTotalText">0 сум</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="ordersScreen" class="screen">
+      <div class="cart-header">
+        <button class="back-btn" onclick="backToMain()">←</button>
+        <h2>Мои заказы</h2>
+      </div>
+      <div id="ordersList" class="orders-list"></div>
+    </section>
+
+    <div id="cartBar" class="cart-bar hidden" onclick="openCartScreen()">
+      <div class="cart-bar-left">
+        <div id="cartBarCount" class="cart-pill">0</div>
+        <div>
+          <div class="cart-bar-title">Корзина</div>
+          <div id="cartBarSubtitle" class="cart-bar-subtitle">0 сум</div>
+        </div>
+      </div>
+      <div class="cart-bar-right">Открыть</div>
+    </div>
+
+    <div id="checkoutBar" class="checkout-bar hidden">
+      <button class="checkout-btn" onclick="submitOrder()">
+        <span>Оформить заказ</span>
+        <span id="checkoutBtnTotal">0 сум</span>
+      </button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

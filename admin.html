@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>TAKE Admin</title>
+  <link rel="stylesheet" href="admin.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="admin-header">
+      <div class="brand">
+        <img src="assets/logo.jpg" alt="TAKE" class="brand-logo">
+        <div>
+          <div class="brand-title">TAKE Admin</div>
+          <div class="brand-subtitle">Управление меню</div>
+        </div>
+      </div>
+      <button class="primary-btn small" onclick="openCreateModal()">+ Новый товар</button>
+    </header>
+
+    <section class="toolbar">
+      <input id="searchInput" class="search" type="text" placeholder="Поиск по названию или категории" oninput="renderItems()" />
+      <select id="categoryFilter" class="select" onchange="renderItems()">
+        <option value="">Все категории</option>
+      </select>
+    </section>
+
+    <section id="statsRow" class="stats-row"></section>
+    <section id="itemsGrid" class="items-grid"></section>
+  </div>
+
+  <div id="editorModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-head">
+        <h2 id="modalTitle">Новый товар</h2>
+        <button class="icon-close" onclick="closeEditor()">✕</button>
+      </div>
+
+      <div class="form-grid">
+        <label>
+          <span>Название</span>
+          <input id="nameInput" type="text" placeholder="Например: Филадельфия" />
+        </label>
+
+        <label>
+          <span>Категория</span>
+          <input id="categoryInput" type="text" placeholder="Например: Роллы" />
+        </label>
+
+        <label>
+          <span>Цена</span>
+          <input id="priceInput" type="number" min="0" step="1000" placeholder="50000" />
+        </label>
+
+        <label>
+          <span>Бейдж</span>
+          <input id="badgeInput" type="text" placeholder="Хит / Новинка / Топ" />
+        </label>
+
+        <label class="full">
+          <span>Фото товара</span>
+          <input id="imageFileInput" type="file" accept="image/png,image/jpeg,image/webp" />
+          <div class="field-hint">Можно загрузить JPG, PNG или WEBP</div>
+          <input id="imageInput" type="text" placeholder="Или вставьте URL вручную" />
+          <button type="button" class="secondary-btn upload-inline-btn" onclick="uploadSelectedImage()">Загрузить файл</button>
+        </label>
+
+        <label class="full">
+          <span>Описание</span>
+          <textarea id="descInput" rows="4" placeholder="Краткое описание блюда"></textarea>
+        </label>
+      </div>
+
+      <div class="preview-block">
+        <div class="preview-title">Предпросмотр</div>
+        <div class="preview-card">
+          <img id="previewImage" src="assets/logo.jpg" alt="preview">
+          <div class="preview-body">
+            <div id="previewBadge" class="preview-badge">Бейдж</div>
+            <h3 id="previewName">Название</h3>
+            <p id="previewDesc">Описание товара</p>
+            <div id="previewPrice" class="preview-price">0 сум</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="deleteBtn" class="danger-btn hidden" onclick="deleteCurrentItem()">Удалить</button>
+        <button class="secondary-btn" onclick="closeEditor()">Отмена</button>
+        <button class="primary-btn" onclick="saveCurrentItem()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="admin.js"></script>
+</body>
+</html>
