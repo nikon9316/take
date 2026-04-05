@@ -1,8 +1,16 @@
-const tg = window.Telegram.WebApp;
-tg.ready();
-tg.expand();
+const tg = window.Telegram?.WebApp || null;
 
-const userId = tg.initDataUnsafe?.user?.id || null;
+if (tg) {
+  try {
+    tg.ready();
+    tg.expand();
+  } catch (e) {
+    console.warn("Telegram WebApp init warning:", e);
+  }
+}
+
+const initData = tg?.initData || "";
+const userId = tg?.initDataUnsafe?.user?.id || null;
 const API_BASE = `${window.location.origin}/api/admin`;
 
 let items = [];
@@ -34,42 +42,96 @@ const previewPrice = document.getElementById("previewPrice");
 init();
 
 async function init() {
-  if (!userId) {
-    document.body.innerHTML = `<div class="shell"><div class="empty-state">Откройте админку из Telegram.</div></div>`;
+  if (!tg || !initData) {
+    renderFatalState(
+      "Откройте админку именно внутри Telegram Mini App, а не в обычном браузере."
+    );
     return;
   }
 
-  await loadItems();
+  if (!userId) {
+    renderFatalState(
+      "Telegram открыл Mini App, но не передал данные пользователя. Закройте и откройте админку заново из бота."
+    );
+    return;
+  }
+
   bindPreview();
+  await loadItems();
+}
+
+function renderFatalState(message) {
+  document.body.innerHTML = `
+    <div class="shell">
+      <div class="empty-state">${escapeHtml(message)}</div>
+    </div>
+  `;
+}
+
+function getAdminHeaders(contentType = "application/json") {
+  const headers = {};
+
+  if (contentType) {
+    headers["Content-Type"] = contentType;
+  }
+
+  if (initData) {
+    headers["X-Telegram-Init-Data"] = initData;
+  }
+
+  return headers;
+}
+
+async function safeJson(res) {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 }
 
 async function loadItems() {
-  const res = await fetch(`${API_BASE}/menu?user_id=${userId}`);
-  if (!res.ok) {
-    document.body.innerHTML = `<div class="shell"><div class="empty-state">Нет доступа к админке.</div></div>`;
-    return;
-  }
+  try {
+    const res = await fetch(`${API_BASE}/menu?user_id=${encodeURIComponent(userId)}`, {
+      headers: getAdminHeaders(null)
+    });
 
-  items = await res.json();
-  renderStats();
-  renderCategoryFilter();
-  renderItems();
+    const data = await safeJson(res);
 
-  const params = new URLSearchParams(window.location.search);
-  const editId = params.get("edit");
-  if (editId) {
-    openEditModal(Number(editId));
+    if (!res.ok) {
+      const msg = data?.error === "forbidden"
+        ? "Нет доступа к админке."
+        : "Не удалось загрузить товары.";
+      renderFatalState(msg);
+      return;
+    }
+
+    items = Array.isArray(data) ? data : [];
+    renderStats();
+    renderCategoryFilter();
+    renderItems();
+
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("edit");
+    if (editId) {
+      openEditModal(Number(editId));
+    }
+  } catch (error) {
+    console.error("loadItems error:", error);
+    renderFatalState("Ошибка загрузки админки. Проверьте сервер и попробуйте снова.");
   }
 }
 
 function formatPrice(value) {
-  return new Intl.NumberFormat("ru-RU").format(value) + " сум";
+  return new Intl.NumberFormat("ru-RU").format(Number(value || 0)) + " сум";
 }
 
 function renderStats() {
   const total = items.length;
-  const totalCategories = new Set(items.map(item => item.category)).size;
-  const avgPrice = total ? Math.round(items.reduce((sum, item) => sum + Number(item.price || 0), 0) / total) : 0;
+  const totalCategories = new Set(items.map(item => item.category).filter(Boolean)).size;
+  const avgPrice = total
+    ? Math.round(items.reduce((sum, item) => sum + Number(item.price || 0), 0) / total)
+    : 0;
 
   statsRow.innerHTML = `
     <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Товаров</div></div>
@@ -81,8 +143,13 @@ function renderStats() {
 function renderCategoryFilter() {
   const categories = [...new Set(items.map(item => item.category).filter(Boolean))].sort();
   const current = categoryFilter.value;
-  categoryFilter.innerHTML = `<option value="">Все категории</option>` +
-    categories.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("");
+
+  categoryFilter.innerHTML =
+    `<option value="">Все категории</option>` +
+    categories
+      .map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`)
+      .join("");
+
   categoryFilter.value = current;
 }
 
@@ -91,10 +158,15 @@ function renderItems() {
   const category = categoryFilter.value;
 
   const filtered = items.filter(item => {
+    const name = String(item.name || "").toLowerCase();
+    const itemCategory = String(item.category || "").toLowerCase();
+    const desc = String(item.desc || "").toLowerCase();
+
     const matchQuery =
-      item.name.toLowerCase().includes(query) ||
-      item.category.toLowerCase().includes(query) ||
-      item.desc.toLowerCase().includes(query);
+      name.includes(query) ||
+      itemCategory.includes(query) ||
+      desc.includes(query);
+
     const matchCategory = !category || item.category === category;
     return matchQuery && matchCategory;
   });
@@ -106,14 +178,21 @@ function renderItems() {
 
   itemsGrid.innerHTML = filtered.map(item => `
     <article class="admin-card">
-      <img src="${item.image || 'assets/logo.jpg'}" alt="${escapeHtml(item.name)}" class="admin-card-image">
+      <img
+        src="${escapeAttr(item.image || 'assets/logo.jpg')}"
+        alt="${escapeAttr(item.name || 'Товар')}"
+        class="admin-card-image"
+        onerror="this.onerror=null;this.src='assets/logo.jpg';"
+      >
       <div class="admin-card-body">
-        <div class="admin-card-badge">${escapeHtml(item.badge || 'Без бейджа')}</div>
-        <h3>${escapeHtml(item.name)}</h3>
-        <div class="admin-card-meta">${escapeHtml(item.category)} • ${formatPrice(item.price)}</div>
-        <p>${escapeHtml(item.desc || '')}</p>
+        <div class="admin-card-badge">${escapeHtml(item.badge || "Без бейджа")}</div>
+        <h3>${escapeHtml(item.name || "")}</h3>
+        <div class="admin-card-meta">
+          ${escapeHtml(item.category || "Без категории")} • ${formatPrice(item.price)}
+        </div>
+        <p>${escapeHtml(item.desc || "")}</p>
         <div class="admin-card-actions">
-          <button class="secondary-btn" onclick="openEditModal(${item.id})">Редактировать</button>
+          <button class="secondary-btn" onclick="openEditModal(${Number(item.id)})">Редактировать</button>
         </div>
       </div>
     </article>
@@ -124,6 +203,7 @@ function openCreateModal() {
   editingId = null;
   modalTitle.textContent = "Новый товар";
   deleteBtn.classList.add("hidden");
+
   nameInput.value = "";
   categoryInput.value = "";
   priceInput.value = "";
@@ -131,6 +211,7 @@ function openCreateModal() {
   imageInput.value = "";
   imageFileInput.value = "";
   descInput.value = "";
+
   updatePreview();
   editorModal.classList.remove("hidden");
 }
@@ -150,6 +231,7 @@ function openEditModal(id) {
   imageInput.value = item.image || "";
   imageFileInput.value = "";
   descInput.value = item.desc || "";
+
   updatePreview();
   editorModal.classList.remove("hidden");
 }
@@ -161,28 +243,34 @@ function closeEditor() {
 async function uploadSelectedImage() {
   const file = imageFileInput.files[0];
   if (!file) {
-    alert('Выберите файл');
+    alert("Выберите файл");
     return;
   }
 
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append("file", file);
 
-  const res = await fetch(`${API_BASE}/upload?user_id=${userId}`, {
-    method: 'POST',
-    body: formData
-  });
+  try {
+    const res = await fetch(`${API_BASE}/upload?user_id=${encodeURIComponent(userId)}`, {
+      method: "POST",
+      headers: initData ? { "X-Telegram-Init-Data": initData } : {},
+      body: formData
+    });
 
-  const data = await res.json();
+    const data = await safeJson(res);
 
-  if (!res.ok || !data.ok) {
-    alert('Ошибка загрузки файла');
-    return;
+    if (!res.ok || !data?.ok) {
+      alert("Ошибка загрузки файла");
+      return;
+    }
+
+    imageInput.value = data.image || "";
+    updatePreview();
+    alert("Фото загружено");
+  } catch (error) {
+    console.error("uploadSelectedImage error:", error);
+    alert("Ошибка загрузки файла");
   }
-
-  imageInput.value = data.image;
-  updatePreview();
-  alert('Фото загружено');
 }
 
 async function saveCurrentItem() {
@@ -201,51 +289,74 @@ async function saveCurrentItem() {
     return;
   }
 
-  let res;
-  if (editingId) {
-    res = await fetch(`${API_BASE}/menu/${editingId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-  } else {
-    res = await fetch(`${API_BASE}/menu`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-  }
+  try {
+    let res;
 
-  if (!res.ok) {
+    if (editingId) {
+      res = await fetch(`${API_BASE}/menu/${editingId}`, {
+        method: "PUT",
+        headers: getAdminHeaders(),
+        body: JSON.stringify(payload)
+      });
+    } else {
+      res = await fetch(`${API_BASE}/menu`, {
+        method: "POST",
+        headers: getAdminHeaders(),
+        body: JSON.stringify(payload)
+      });
+    }
+
+    const response = await safeJson(res);
+
+    if (!res.ok || !response?.ok) {
+      alert("Ошибка сохранения");
+      return;
+    }
+
+    closeEditor();
+    await loadItems();
+
+    if (tg?.sendData) {
+      try {
+        tg.sendData(JSON.stringify({
+          admin_action: "admin_saved",
+          item_name: response.item?.name || payload.name
+        }));
+      } catch (e) {
+        console.warn("tg.sendData warning:", e);
+      }
+    }
+  } catch (error) {
+    console.error("saveCurrentItem error:", error);
     alert("Ошибка сохранения");
-    return;
   }
-
-  const response = await res.json();
-  closeEditor();
-  await loadItems();
-  tg.sendData(JSON.stringify({
-    admin_action: "admin_saved",
-    item_name: response.item?.name || payload.name
-  }));
 }
 
 async function deleteCurrentItem() {
   if (!editingId) return;
+
   const ok = confirm("Удалить товар?");
   if (!ok) return;
 
-  const res = await fetch(`${API_BASE}/menu/${editingId}?user_id=${userId}`, {
-    method: "DELETE"
-  });
+  try {
+    const res = await fetch(`${API_BASE}/menu/${editingId}?user_id=${encodeURIComponent(userId)}`, {
+      method: "DELETE",
+      headers: getAdminHeaders(null)
+    });
 
-  if (!res.ok) {
+    const data = await safeJson(res);
+
+    if (!res.ok || (data && data.ok === false)) {
+      alert("Ошибка удаления");
+      return;
+    }
+
+    closeEditor();
+    await loadItems();
+  } catch (error) {
+    console.error("deleteCurrentItem error:", error);
     alert("Ошибка удаления");
-    return;
   }
-
-  closeEditor();
-  await loadItems();
 }
 
 function bindPreview() {
@@ -253,12 +364,16 @@ function bindPreview() {
     el.addEventListener("input", updatePreview);
   });
 
-  imageFileInput.addEventListener('change', () => {
+  imageFileInput.addEventListener("change", () => {
     const file = imageFileInput.files[0];
-    if (!file) return;
+    if (!file) {
+      updatePreview();
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = e => {
-      previewImage.src = e.target.result;
+      previewImage.src = e.target?.result || "assets/logo.jpg";
     };
     reader.readAsDataURL(file);
   });
@@ -271,7 +386,13 @@ function updatePreview() {
   previewDesc.textContent = descInput.value.trim() || "Описание товара";
   previewBadge.textContent = badgeInput.value.trim() || "Бейдж";
   previewPrice.textContent = formatPrice(Number(priceInput.value || 0));
-  previewImage.src = imageInput.value.trim() || "assets/logo.jpg";
+
+  const src = imageInput.value.trim() || "assets/logo.jpg";
+  previewImage.src = src;
+  previewImage.onerror = () => {
+    previewImage.onerror = null;
+    previewImage.src = "assets/logo.jpg";
+  };
 }
 
 function escapeHtml(value) {
@@ -281,4 +402,8 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value);
 }
