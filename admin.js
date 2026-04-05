@@ -9,8 +9,9 @@ if (tg) {
   }
 }
 
+const urlParams = new URLSearchParams(window.location.search);
 const initData = tg?.initData || "";
-const userId = tg?.initDataUnsafe?.user?.id || null;
+const userId = tg?.initDataUnsafe?.user?.id || urlParams.get("user_id") || null;
 const API_BASE = `${window.location.origin}/api/admin`;
 
 let items = [];
@@ -42,17 +43,8 @@ const previewPrice = document.getElementById("previewPrice");
 init();
 
 async function init() {
-  if (!tg || !initData) {
-    renderFatalState(
-      "Откройте админку именно внутри Telegram Mini App, а не в обычном браузере."
-    );
-    return;
-  }
-
   if (!userId) {
-    renderFatalState(
-      "Telegram открыл Mini App, но не передал данные пользователя. Закройте и откройте админку заново из бота."
-    );
+    renderFatalState("Не удалось определить пользователя Telegram.");
     return;
   }
 
@@ -70,15 +62,8 @@ function renderFatalState(message) {
 
 function getAdminHeaders(contentType = "application/json") {
   const headers = {};
-
-  if (contentType) {
-    headers["Content-Type"] = contentType;
-  }
-
-  if (initData) {
-    headers["X-Telegram-Init-Data"] = initData;
-  }
-
+  if (contentType) headers["Content-Type"] = contentType;
+  if (initData) headers["X-Telegram-Init-Data"] = initData;
   return headers;
 }
 
@@ -111,11 +96,8 @@ async function loadItems() {
     renderCategoryFilter();
     renderItems();
 
-    const params = new URLSearchParams(window.location.search);
-    const editId = params.get("edit");
-    if (editId) {
-      openEditModal(Number(editId));
-    }
+    const editId = urlParams.get("edit");
+    if (editId) openEditModal(Number(editId));
   } catch (error) {
     console.error("loadItems error:", error);
     renderFatalState("Ошибка загрузки админки. Проверьте сервер и попробуйте снова.");
